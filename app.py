@@ -1,14 +1,21 @@
-from dash import Dash, html, dcc, Input, Output
+from dash import Dash, html, dcc, Input, Output, dash_table
+from dash_bootstrap_components import themes
+from dash_bootstrap_templates import load_figure_template
 from json import load
-from os.path import expanduser
 from pandas import DataFrame
-import plotly.express as px
+import plotly.express as px, plotly.io as pio
+from random import randint
 
 PATH = "jobs.json"
 
-app = Dash(__name__)
+dbc_css = ("https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.2/dbc.min.css")
+app = Dash(__name__, external_stylesheets=[themes.SLATE, dbc_css])
+load_figure_template("slate")
+
+df, symbols = DataFrame(), None
 
 def main():
+    global df, symbols
     with open(PATH, "r") as file:
         jobs = [job for worker in load(file) for job in worker['jobs']]
 
@@ -35,16 +42,76 @@ def main():
                 table_dict[key + "_collateral_usd"].append(value["active_collateral_usd"])
 
     df = DataFrame(data=table_dict)
-
-    fig = px.scatter(df, x="utilization_ratio", y="total_borrow_usd", title="Liquidation Bot Dashboard")
+    
+    fig = px.scatter(
+        data_frame=df,
+        x="utilization_ratio",
+        y="total_borrow_usd",
+        range_x=[0.8,1],
+        custom_data=["storage_address"],
+        title="Liquidation Bot Dashboard"
+    ).update_traces(hovertemplate=None)
 
     app.layout = html.Div([
-        dcc.Graph(
-            id="borr-uti-graph",
-            figure=fig
-        )
+        dcc.Tabs([
+            dcc.Tab(label="Graph", className="dbc", children=[
+                dcc.Graph(
+                    id="borr-uti-graph",
+                    figure=fig
+                ),
+                html.Div(
+                    id="details-div",
+                    className="dbc"
+                )
+            ]),
+            dcc.Tab(label="Table", className="dbc", children=[
+                html.Div([
+                    dash_table.DataTable(
+                        data=df.to_dict("records"),
+                        columns=[{'id': c, 'name': c} for c in df.columns],
+                        id="accounts-table",
+                        sort_action="native",
+                        style_table={'overflowY': 'scroll'},
+                    )
+                ], className="dbc")
+            ])
+        ], className="dbc")
     ])
 
+@app.callback(
+    Output("details-div", "children"),
+    Input("borr-uti-graph", "clickData")
+)
+def change_lookup_address(click_data: str):
+    if click_data == None:
+        filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
+    else:
+        filtered_data = df[df["storage_address"] == click_data["points"][0]["customdata"][-1]].to_dict("records")
+    
+    first_row = {"TYPE": "collateral usd", **{symbol: filtered_data[0][symbol + "_collateral_usd"] for symbol in symbols}}
+    second_row = {"TYPE": "borrow usd", **{symbol: filtered_data[0][symbol + "_borrow_usd"] for symbol in symbols}}
+    
+    return html.Div([
+            html.H6(
+                dcc.Markdown(f"""
+                    Storage address: [{filtered_data[0]['storage_address'][:8]}...{filtered_data[0]['storage_address'][-8:]}](https://algoexplorer.io/address/{filtered_data[0]['storage_address']})
+
+                    Utilization ratio: {filtered_data[0]['utilization_ratio']}
+
+                    Total collateral: {filtered_data[0]['total_collateral_usd']}$
+                    
+                    Total borrow: {filtered_data[0]['total_borrow_usd']}$"""),
+            ),
+            html.Br(),
+            dash_table.DataTable(
+                data=[first_row, second_row],
+                columns=[{'id': c, 'name': c} for c in first_row.keys()],
+                style_cell={'textAlign': 'center'},
+                style_cell_conditional=[{"if": {"column_id": "TYPE"}, "textAlign": "left"}],
+                id="details-table",
+                style_table={'overflowY': 'scroll'}
+            )
+        ])
 
 if __name__ == '__main__':
     main()
