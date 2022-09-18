@@ -1,7 +1,7 @@
 from dash import Dash, html, dcc, Input, Output, dash_table
 from dash_bootstrap_components import themes
 from dash_bootstrap_templates import load_figure_template
-from json import load
+from json import load, dump
 from pandas import DataFrame
 import plotly.express as px, plotly.io as pio
 from random import randint
@@ -14,8 +14,8 @@ load_figure_template("slate")
 
 df, symbols = DataFrame(), None
 
-def main():
-    global df, symbols
+def load_and_tabulate_data():
+    global symbols
     with open(PATH, "r") as file:
         jobs = [job for worker in load(file) for job in worker['jobs']]
 
@@ -41,23 +41,17 @@ def main():
                 table_dict[key + "_borrow_usd"].append(value["borrow_usd"])
                 table_dict[key + "_collateral_usd"].append(value["active_collateral_usd"])
 
-    df = DataFrame(data=table_dict)
-    
-    fig = px.scatter(
-        data_frame=df,
-        x="utilization_ratio",
-        y="total_borrow_usd",
-        range_x=[0.8,1],
-        custom_data=["storage_address"],
-        title="Liquidation Bot Dashboard"
-    ).update_traces(hovertemplate=None)
+    return DataFrame(data=table_dict)
+
+def main():
+    global df
+    df = load_and_tabulate_data()
 
     app.layout = html.Div([
         dcc.Tabs([
             dcc.Tab(label="Graph", className="dbc", children=[
                 dcc.Graph(
                     id="borr-uti-graph",
-                    figure=fig
                 ),
                 html.Div(
                     id="details-div",
@@ -73,10 +67,44 @@ def main():
                         sort_action="native",
                         style_table={'overflowY': 'scroll'},
                     )
-                ], className="dbc")
+                ], className="dbc", id="table-div")
             ])
-        ], className="dbc")
-    ])
+        ], className="dbc"),
+        dcc.Interval(
+            id='interval-component',
+            interval=10*1000, # in milliseconds
+            n_intervals=0
+        )
+    ], className="dbc")
+
+@app.callback(
+    Output('borr-uti-graph', 'figure'),
+    Input('interval-component', 'n_intervals')
+)
+def update_graph(n):
+    df = load_and_tabulate_data()
+    return px.scatter(
+        data_frame=df,
+        x="utilization_ratio",
+        y="total_borrow_usd",
+        range_x=[0.8,1],
+        custom_data=["storage_address"],
+        title="Liquidation Bot Dashboard"
+    ).update_traces(hovertemplate=None)
+
+@app.callback(
+    Output('table-div', 'children'),
+    Input('interval-component', 'n_intervals')
+)
+def update_table(n):
+    df = load_and_tabulate_data()
+    return dash_table.DataTable(
+        data=df.to_dict("records"),
+        columns=[{'id': c, 'name': c} for c in df.columns],
+        id="accounts-table",
+        sort_action="native",
+        style_table={'overflowY': 'scroll'},
+    )
 
 @app.callback(
     Output("details-div", "children"),
