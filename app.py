@@ -87,7 +87,8 @@ def update_graph(n):
         data_frame=df,
         x="utilization_ratio",
         y="total_borrow_usd",
-        range_x=[0.8,1],
+        range_x=[0.91,1],
+        range_y=[0,20000],
         custom_data=["storage_address"],
         title="Liquidation Bot Dashboard"
     ).update_traces(hovertemplate=None)
