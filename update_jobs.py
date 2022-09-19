@@ -2,6 +2,7 @@ from json import dump
 from algorand_modules import Clients
 from algorand_modules.custom_clients.algofi_lending_client import LendingVersion
 from algosdk.error import AlgodHTTPError, IndexerHTTPError
+from urllib.error import URLError
 from multiprocessing.pool import ThreadPool
 from app import PATH
 
@@ -44,7 +45,7 @@ def threads_update():
                     states.append(user_state)
                 else:
                     storage_addresses.remove(address)
-            except (AlgodHTTPError, IndexerHTTPError):
+            except (AlgodHTTPError, IndexerHTTPError, URLError):
                 pass
         return states
 
