@@ -47,22 +47,12 @@ def load_and_tabulate_data():
 def main():
     global df
     df = load_and_tabulate_data()
-    fig = px.scatter(
-        data_frame=df,
-        x="utilization_ratio",
-        y="total_borrow_usd",
-        range_x=[0.91,1],
-        range_y=[0,20000],
-        custom_data=["storage_address"],
-        title="Liquidation Bot Dashboard"
-    ).update_traces(hovertemplate=None)
 
     app.layout = html.Div([
         dcc.Tabs([
             dcc.Tab(label="Graph", className="dbc", children=[
                 dcc.Graph(
                     id="borr-uti-graph",
-                    figure=fig,
                 ),
                 html.Div(
                     id="details-div",
@@ -98,8 +88,6 @@ def update_graph(n):
         data_frame=df,
         x="utilization_ratio",
         y="total_borrow_usd",
-        range_x=[0.91,1],
-        range_y=[0,20000],
         custom_data=["storage_address"],
         title="Liquidation Bot Dashboard",
     ).update_traces(hovertemplate=None)
