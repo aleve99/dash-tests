@@ -7,8 +7,9 @@ from multiprocessing.pool import ThreadPool
 from app import PATH
 
 NUM_THREADS, run, storage_addresses = 6, True, None
-clients = Clients(lending_version=LendingVersion.V2)
+clients = Clients(lending_version=LendingVersion.V1)
 MIN_USD = 1
+MIN_RATIO = 0.88
 
 def sublist(starting_list: list, num_out: int):
     to_return, i = [[] for _ in range(num_out)], 0
@@ -41,7 +42,7 @@ def threads_update():
         for address in addresses:
             try:
                 user_state = clients.algofi_client.get_user_lending_state(address)
-                if user_state["info"]["total_collateral_usd"] > MIN_USD:
+                if user_state["info"]["total_collateral_usd"] > MIN_USD and user_state["info"]["utilization_ratio"] > MIN_RATIO:
                     states.append(user_state)
                 else:
                     storage_addresses.remove(address)
