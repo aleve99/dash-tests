@@ -7,18 +7,22 @@ from pandas import DataFrame
 import plotly.express as px
 from random import randint
 from flask import request, jsonify
+from pathlib import Path
+from typing import Tuple, List
 
-PATH = "jobs.json"
+SUPPORTED_VERSIONS = (1,2)
+BASE_FOLDER = Path(".")
+JOBS_V1 = BASE_FOLDER.joinpath("jobs_V1.json")
+JOBS_V2 = BASE_FOLDER.joinpath("jobs_V2.json")
 
 dbc_css = ("https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.2/dbc.min.css")
 app = Dash(__name__, external_stylesheets=[themes.SLATE, dbc_css])
-server, symbols = app.server, None
+server = app.server
 
 load_figure_template("slate")
 
-def load_and_tabulate_data():
-    global symbols
-    with open(PATH, "r") as file:
+def load_and_tabulate_data(version: int) -> Tuple[DataFrame , List[str]]:   
+    with open(JOBS_V1 if version == "V1" else JOBS_V2, "r") as file:
         jobs = [job for worker in load(file) for job in worker['jobs']]
 
     symbols = [key for key in jobs[0].keys() if key != "info"]
@@ -42,30 +46,38 @@ def load_and_tabulate_data():
             else:
                 table_dict[key + "_borrow_usd"].append(value["borrow_usd"])
                 table_dict[key + "_collateral_usd"].append(value["active_collateral_usd"])
-
-    return DataFrame(data=table_dict)
+    
+    return DataFrame(data=table_dict), symbols
 
 @server.route("/update-jobs", methods=['PUT'])
 def update_jobs():
     try:
+        version = int(request.args['version'])
+        if version not in SUPPORTED_VERSIONS:
+            raise ValueError
+    except (KeyError, ValueError):
+        return "Must specify a supported version within request parameters: version: int, 1 | 2"
+    
+    try:
         record = loads(request.data)
     except JSONDecodeError:
-        return jsonify({"result": False})
+        return "Can't decode object", 500
     
     if record is not None:
-        with open(PATH, 'w') as file:
+        with open(JOBS_V1 if version == "1" else version == "2", 'w') as file:
             dump(record, file)
 
-        return jsonify({"result": True})
+        return jsonify({"response": "Jobs updated"})
     else:
-        return jsonify({"result": False})
+        return "Can't decode object", 500
 
 @app.callback(
     Output('borr-uti-graph', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Input('version', 'value')
 )
-def update_graph(n):
-    df = load_and_tabulate_data()
+def update_graph(version: str):
+    df = load_and_tabulate_data(version)[0]
+    
     return px.scatter(
         data_frame=df,
         x="utilization_ratio",
@@ -76,10 +88,11 @@ def update_graph(n):
 
 @app.callback(
     Output('table-div', 'children'),
-    Input('interval-component', 'n_intervals')
+    Input('version', 'value')
 )
-def update_table(n):
-    df = load_and_tabulate_data()
+def update_table(version: str):
+    df = load_and_tabulate_data(version)[0]
+    
     return dash_table.DataTable(
         data=df.to_dict("records"),
         columns=[{'id': c, 'name': c} for c in df.columns],
@@ -90,14 +103,20 @@ def update_table(n):
 
 @app.callback(
     Output("details-div", "children"),
-    Input("borr-uti-graph", "clickData")
+    Input("borr-uti-graph", "clickData"),
+    Input('version', 'value')
 )
-def change_lookup_address(click_data: str):
+def change_lookup_address(click_data: str, version: str):
+    df, symbols = load_and_tabulate_data(version)
+    print(symbols, click_data, version)
+
     if click_data == None:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
     else:
         filtered_data = df[df["storage_address"] == click_data["points"][0]["customdata"][-1]].to_dict("records")
-    
+        if not filtered_data:
+            filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
+
     first_row = {"TYPE": "collateral usd", **{symbol: filtered_data[0][symbol + "_collateral_usd"] for symbol in symbols}}
     second_row = {"TYPE": "borrow usd", **{symbol: filtered_data[0][symbol + "_borrow_usd"] for symbol in symbols}}
     
@@ -123,9 +142,9 @@ def change_lookup_address(click_data: str):
             )
         ])
 
-df = load_and_tabulate_data()
 
 app.layout = html.Div([
+    dcc.RadioItems(['V1', 'V2'], "V1", id="version", className="dbc"),
     dcc.Tabs([
         dcc.Tab(label="Graph", className="dbc", children=[
             dcc.Graph(
@@ -139,8 +158,6 @@ app.layout = html.Div([
         dcc.Tab(label="Table", className="dbc", children=[
             html.Div([
                 dash_table.DataTable(
-                    data=df.to_dict("records"),
-                    columns=[{'id': c, 'name': c} for c in df.columns],
                     id="accounts-table",
                     sort_action="native",
                     style_table={'overflowY': 'scroll'},
@@ -148,11 +165,11 @@ app.layout = html.Div([
             ], className="dbc", id="table-div")
         ])
     ], className="dbc"),
-    dcc.Interval(
-        id='interval-component',
-        interval=10*1000, # in milliseconds
-        n_intervals=0
-    )
+    #dcc.Interval(
+    #    id='interval-component',
+    #    interval=10*1000, # in milliseconds
+    #    n_intervals=0
+    #)
 ], className="dbc")
 
 if __name__ == '__main__':
