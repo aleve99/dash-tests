@@ -1,19 +1,20 @@
 from dash import Dash, html, dcc, Input, Output, dash_table
 from dash_bootstrap_components import themes
 from dash_bootstrap_templates import load_figure_template
-from json import load, dump
+from json import load, dump, loads
+from json.decoder import JSONDecodeError
 from pandas import DataFrame
-import plotly.express as px, plotly.io as pio
-from plotly.graph_objs import Scatter
+import plotly.express as px
 from random import randint
+from flask import request, jsonify
 
 PATH = "jobs.json"
 
 dbc_css = ("https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.2/dbc.min.css")
 app = Dash(__name__, external_stylesheets=[themes.SLATE, dbc_css])
-load_figure_template("slate")
+server, symbols = app.server, None
 
-df, symbols = DataFrame(), None
+load_figure_template("slate")
 
 def load_and_tabulate_data():
     global symbols
@@ -44,39 +45,20 @@ def load_and_tabulate_data():
 
     return DataFrame(data=table_dict)
 
-def main():
-    global df
-    df = load_and_tabulate_data()
+@server.route("/update-jobs", methods=['PUT'])
+def update_jobs():
+    try:
+        record = loads(request.data)
+    except JSONDecodeError:
+        return jsonify({"result": False})
+    
+    if record is not None:
+        with open(PATH, 'w') as file:
+            dump(record, file)
 
-    app.layout = html.Div([
-        dcc.Tabs([
-            dcc.Tab(label="Graph", className="dbc", children=[
-                dcc.Graph(
-                    id="borr-uti-graph",
-                ),
-                html.Div(
-                    id="details-div",
-                    className="dbc"
-                )
-            ]),
-            dcc.Tab(label="Table", className="dbc", children=[
-                html.Div([
-                    dash_table.DataTable(
-                        data=df.to_dict("records"),
-                        columns=[{'id': c, 'name': c} for c in df.columns],
-                        id="accounts-table",
-                        sort_action="native",
-                        style_table={'overflowY': 'scroll'},
-                    )
-                ], className="dbc", id="table-div")
-            ])
-        ], className="dbc"),
-        dcc.Interval(
-            id='interval-component',
-            interval=10*1000, # in milliseconds
-            n_intervals=0
-        )
-    ], className="dbc")
+        return jsonify({"result": True})
+    else:
+        return jsonify({"result": False})
 
 @app.callback(
     Output('borr-uti-graph', 'figure'),
@@ -141,6 +123,37 @@ def change_lookup_address(click_data: str):
             )
         ])
 
+df = load_and_tabulate_data()
+
+app.layout = html.Div([
+    dcc.Tabs([
+        dcc.Tab(label="Graph", className="dbc", children=[
+            dcc.Graph(
+                id="borr-uti-graph",
+            ),
+            html.Div(
+                id="details-div",
+                className="dbc"
+            )
+        ]),
+        dcc.Tab(label="Table", className="dbc", children=[
+            html.Div([
+                dash_table.DataTable(
+                    data=df.to_dict("records"),
+                    columns=[{'id': c, 'name': c} for c in df.columns],
+                    id="accounts-table",
+                    sort_action="native",
+                    style_table={'overflowY': 'scroll'},
+                )
+            ], className="dbc", id="table-div")
+        ])
+    ], className="dbc"),
+    dcc.Interval(
+        id='interval-component',
+        interval=10*1000, # in milliseconds
+        n_intervals=0
+    )
+], className="dbc")
+
 if __name__ == '__main__':
-    main()
     app.run(debug=True)
