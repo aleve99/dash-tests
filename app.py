@@ -64,7 +64,7 @@ def update_jobs():
         return "Can't decode object", 500
     
     if record is not None:
-        with open(JOBS_V1 if version == "1" else version == "2", 'w') as file:
+        with open(JOBS_V1 if version == "1" else JOBS_V2, 'w') as file:
             dump(record, file)
 
         return jsonify({"response": "Jobs updated"})
@@ -108,7 +108,6 @@ def update_table(version: str):
 )
 def change_lookup_address(click_data: str, version: str):
     df, symbols = load_and_tabulate_data(version)
-    print(symbols, click_data, version)
 
     if click_data == None:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
