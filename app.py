@@ -1,5 +1,5 @@
 from dash import Dash, html, dcc, Input, Output, dash_table
-from dash_bootstrap_components import themes
+from dash_bootstrap_components import themes, Row, Col
 from dash_bootstrap_templates import load_figure_template
 from json import load, dump, loads
 from json.decoder import JSONDecodeError
@@ -9,6 +9,8 @@ from random import randint
 from flask import request, jsonify
 from pathlib import Path
 from typing import Tuple, List
+from time import time
+from datetime import datetime
 
 SUPPORTED_VERSIONS = (1,2)
 BASE_FOLDER = Path(".")
@@ -23,7 +25,8 @@ load_figure_template("slate")
 
 def load_and_tabulate_data(version: int) -> Tuple[DataFrame , List[str]]:   
     with open(JOBS_V1 if version == "V1" else JOBS_V2, "r") as file:
-        jobs = [job for worker in load(file) for job in worker['jobs']]
+        data, timestamp = load(file).values()
+        jobs = [job for worker in data for job in worker['jobs']]
 
     symbols = [key for key in jobs[0].keys() if key != "info"]
 
@@ -35,7 +38,6 @@ def load_and_tabulate_data(version: int) -> Tuple[DataFrame , List[str]]:
         **{symbol + "_borrow_usd": [] for symbol in symbols},
         **{symbol + "_collateral_usd": [] for symbol in symbols}
     }
-
     for job in jobs:
         for key, value in job.items():
             if key == "info":
@@ -47,7 +49,7 @@ def load_and_tabulate_data(version: int) -> Tuple[DataFrame , List[str]]:
                 table_dict[key + "_borrow_usd"].append(value["borrow_usd"])
                 table_dict[key + "_collateral_usd"].append(value["active_collateral_usd"])
     
-    return DataFrame(data=table_dict), symbols
+    return DataFrame(data=table_dict), symbols, datetime.fromtimestamp(timestamp)
 
 @server.route("/update-jobs", methods=['PUT'])
 def update_jobs():
@@ -65,7 +67,7 @@ def update_jobs():
 
     if record is not None:
         with open(JOBS_V1 if version == 1 else JOBS_V2, 'w') as file:
-            dump(record, file)
+            dump({"record": record, "timestamp": int(time())}, file)
             
         server.logger.info(f"{JOBS_V1 if version == 1 else JOBS_V2} updated!")
         return jsonify({"response": "Jobs updated"})
@@ -74,10 +76,13 @@ def update_jobs():
 
 @app.callback(
     Output('borr-uti-graph', 'figure'),
-    Input('version', 'value')
+    Output('table-div', 'children'),
+    Output("update-time", "children"),
+    Input('version', 'value'),
+    Input('refresh-btn', 'n_clicks')
 )
-def update_graph(version: str):
-    df = load_and_tabulate_data(version)[0]
+def update_graph(version: str, n_clicks: int):
+    df, symbols, timestamp = load_and_tabulate_data(version)
     
     return px.scatter(
         data_frame=df,
@@ -85,22 +90,13 @@ def update_graph(version: str):
         y="total_borrow_usd",
         custom_data=["storage_address"],
         title="Liquidation Bot Dashboard",
-    ).update_traces(hovertemplate=None)
-
-@app.callback(
-    Output('table-div', 'children'),
-    Input('version', 'value')
-)
-def update_table(version: str):
-    df = load_and_tabulate_data(version)[0]
-    
-    return dash_table.DataTable(
+    ).update_traces(hovertemplate=None), dash_table.DataTable(
         data=df.to_dict("records"),
         columns=[{'id': c, 'name': c} for c in df.columns],
         id="accounts-table",
         sort_action="native",
         style_table={'overflowY': 'scroll'},
-    )
+    ), html.Div(f"Last update: {timestamp}")
 
 @app.callback(
     Output("details-div", "children"),
@@ -108,7 +104,7 @@ def update_table(version: str):
     Input('version', 'value')
 )
 def change_lookup_address(click_data: str, version: str):
-    df, symbols = load_and_tabulate_data(version)
+    df, symbols, timestamp = load_and_tabulate_data(version)
 
     if click_data == None:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
@@ -142,9 +138,21 @@ def change_lookup_address(click_data: str, version: str):
             )
         ])
 
-
 app.layout = html.Div([
-    dcc.RadioItems(['V1', 'V2'], "V1", id="version", className="dbc"),
+    Row([
+        Col(
+            dcc.RadioItems(['V1', 'V2'], "V1", id="version", className="dbc", style={"font-size": 20}),
+            width='auto'
+        ),
+        Col(
+            html.Div("", id="update-time", className='dbc'),
+            width='auto',
+        ),
+        Col(
+            html.Button("Refresh", id='refresh-btn', className="dbc"),
+            width='auto'
+        ),
+    ], className="dbc", style={'padding': 10}, justify='center'),
     dcc.Tabs([
         dcc.Tab(label="Graph", className="dbc", children=[
             dcc.Graph(
