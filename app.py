@@ -62,11 +62,12 @@ def update_jobs():
         record = loads(request.data)
     except JSONDecodeError:
         return "Can't decode object", 500
-    print(version)
+
     if record is not None:
         with open(JOBS_V1 if version == 1 else JOBS_V2, 'w') as file:
             dump(record, file)
-
+            
+        server.logger.info(f"{JOBS_V1 if version == 1 else JOBS_V2} updated!")
         return jsonify({"response": "Jobs updated"})
     else:
         return "Can't decode object", 500
