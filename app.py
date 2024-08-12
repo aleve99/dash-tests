@@ -12,7 +12,7 @@ from typing import Tuple, List
 from time import time
 from datetime import datetime
 
-BASE_FOLDER = Path("../../javascript/folks-liquidator")
+BASE_FOLDER = Path(".")
 DATA = BASE_FOLDER.joinpath("data.json")
 
 dbc_css = ("https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.2/dbc.min.css")
