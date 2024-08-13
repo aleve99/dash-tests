@@ -8,7 +8,7 @@ import plotly.express as px
 from random import randint
 from flask import request, jsonify
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 from time import time
 from datetime import datetime
 
@@ -23,8 +23,8 @@ load_figure_template("slate")
 
 def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:   
     with open(DATA) as file:
-        data = load(file)
-        loans_data: dict = data["LOANS"]
+        data: dict = load(file)
+        loans_data: Dict[Dict[str, List[dict]]] = data["LOANS"]
         symbols: dict = data["SYMBOLS"]
         timestamp = data["TIMESTAMP"]
 
@@ -38,28 +38,28 @@ def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:
         **{symbol + "_collateral_usd": [] for symbol in symbols.values()}
     }
 
-    for loan_type, loans in loans_data.items():
-        for loan in loans:
-            table_dict['storage_address'].append(loan["escrowAddress"])
-            table_dict['utilization_ratio'].append(int(loan["borrowUtilisationRatio"]) / 1e4)
-            table_dict['total_collateral_usd'].append(int(loan["totalCollateralBalanceValue"]) / 1e4)
-            table_dict['total_borrow_usd'].append(int(loan["totalBorrowBalanceValue"]) / 1e4)
-            table_dict['loan_type'].append(loan_type)
+    for loans_by_range in loans_data.values():
+        for loan_type, loans in loans_by_range.items():
+            for loan in loans:
+                table_dict['storage_address'].append(loan["escrowAddress"])
+                table_dict['utilization_ratio'].append(int(loan["borrowUtilisationRatio"]) / 1e4)
+                table_dict['total_collateral_usd'].append(int(loan["totalCollateralBalanceValue"]) / 1e4)
+                table_dict['total_borrow_usd'].append(int(loan["totalBorrowBalanceValue"]) / 1e4)
+                table_dict['loan_type'].append(loan_type)       
+                for asset_id, symbol in symbols.items():
+                    collaterals: list = loan['collaterals']
+                    borrows: list = loan['borrows']
+                    
+                    collateral = list(filter(lambda c: c['assetId'] == int(asset_id), collaterals))
+                    borrow = list(filter(lambda c: c['assetId'] == int(asset_id), borrows))
 
-            for asset_id, symbol in symbols.items():
-                collaterals: list = loan['collaterals']
-                borrows: list = loan['borrows']
+                    table_dict[symbol + "_collateral_usd"].append(
+                        int(collateral[0]['balanceValue']) / 1e4 if len(collateral) != 0 else 0
+                    )
 
-                collateral = list(filter(lambda c: c['assetId'] == int(asset_id), collaterals))
-                borrow = list(filter(lambda c: c['assetId'] == int(asset_id), borrows))
-
-                table_dict[symbol + "_collateral_usd"].append(
-                    int(collateral[0]['balanceValue']) / 1e4 if len(collateral) != 0 else 0
-                )
-                
-                table_dict[symbol + "_borrow_usd"].append(
-                    int(borrow[0]['borrowBalanceValue']) / 1e4 if len(borrow) != 0 else 0
-                )
+                    table_dict[symbol + "_borrow_usd"].append(
+                        int(borrow[0]['borrowBalanceValue']) / 1e4 if len(borrow) != 0 else 0
+                    )
     
     return DataFrame(data=table_dict), symbols, datetime.fromtimestamp(timestamp)
 
