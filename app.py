@@ -1,5 +1,5 @@
+import dash_bootstrap_components as dbc
 from dash import Dash, html, dcc, Input, Output, dash_table
-from dash_bootstrap_components import themes, Row, Col
 from dash_bootstrap_templates import load_figure_template
 from json import load, dump, loads
 from json.decoder import JSONDecodeError
@@ -9,26 +9,39 @@ from random import randint
 from flask import request, jsonify
 from pathlib import Path
 from typing import Tuple, List, Dict
-from time import time
 from datetime import datetime
+from os import environ
 
-BASE_FOLDER = Path(".")
-DATA = BASE_FOLDER.joinpath("data.json")
+
+DATA_DIR = Path("." if not environ.get("DATA_DIR") else environ['DATA_DIR'])
+DATA = DATA_DIR.joinpath("data.json")
+
+RANGES: List[str] = []
 
 dbc_css = ("https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.2/dbc.min.css")
-app = Dash(__name__, external_stylesheets=[themes.SLATE, dbc_css])
+app = Dash(__name__, external_stylesheets=[dbc.themes.SLATE, dbc_css])
 server = app.server
 
 load_figure_template("slate")
 
-def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:   
-    with open(DATA) as file:
-        data: dict = load(file)
-        loans_data: Dict[Dict[str, List[dict]]] = data["LOANS"]
-        symbols: dict = data["SYMBOLS"]
-        timestamp = data["TIMESTAMP"]
+def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:
+    global RANGES
+    if DATA.exists():
+        with open(DATA) as file:
+            data: dict = load(file)
+            loans_data: Dict[Dict[str, List[dict]]] = data["LOANS"]
+            symbols: dict = data["SYMBOLS"]
+            timestamp = data["TIMESTAMP"]
+    else:
+        data: dict = {}
+        loans_data: dict = {}
+        symbols: dict = {}
+        timestamp = 0
+
+    RANGES = loans_data.keys()
 
     table_dict = {
+        "range": [],
         "storage_address": [],
         "utilization_ratio": [],
         "total_collateral_usd": [],
@@ -38,9 +51,10 @@ def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:
         **{symbol + "_collateral_usd": [] for symbol in symbols.values()}
     }
 
-    for loans_by_range in loans_data.values():
+    for r, loans_by_range in loans_data.items():
         for loan_type, loans in loans_by_range.items():
             for loan in loans:
+                table_dict['range'].append(r)
                 table_dict['storage_address'].append(loan["escrowAddress"])
                 table_dict['utilization_ratio'].append(int(loan["borrowUtilisationRatio"]) / 1e4)
                 table_dict['total_collateral_usd'].append(int(loan["totalCollateralBalanceValue"]) / 1e4)
@@ -62,6 +76,7 @@ def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:
                     )
     
     return DataFrame(data=table_dict), symbols, datetime.fromtimestamp(timestamp)
+load_and_tabulate_data()
 
 @server.route("/update-jobs", methods=['PUT'])
 def update_jobs():
@@ -79,16 +94,32 @@ def update_jobs():
     else:
         return "Can't decode object", 500
 
-@app.callback(
+schema = [
     Output('borr-uti-graph', 'figure'),
     Output('table-div', 'children'),
-    Output("update-time", "children"),
+    Output("update-time", "children")
+]
+schema.extend(
+    Output(f"num-range-{i}", "children") for i in range(len(RANGES))
+)
+schema.extend([
+    Output("tot-borrow", "children"),
+    Output("tot-collateral", "children")
+])
+schema.append(
     Input('refresh-btn', 'n_clicks')
 )
+
+@app.callback(schema)
 def update_graph(n_clicks: int):
     df, symbols, timestamp = load_and_tabulate_data()
+
+    totals = [len(df[df["range"] == r]) for r in RANGES]
+
+    tot_borrow = df['total_borrow_usd'].sum()
+    tot_collateral = df['total_collateral_usd'].sum()
     
-    return px.scatter(
+    output = [px.scatter(
         data_frame=df,
         x="utilization_ratio",
         y="total_borrow_usd",
@@ -100,7 +131,34 @@ def update_graph(n_clicks: int):
         id="accounts-table",
         sort_action="native",
         style_table={'overflowY': 'scroll'},
-    ), html.Div(f"Last update: {timestamp}")
+    ), html.Div(f"Last update: {timestamp}")]
+    
+    output.extend(
+        dbc.Card([
+            dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(n, className="card-title"),
+                html.P("loans", className="card-text"),
+            ])
+        ]) for r, n in zip(RANGES, totals)
+    )
+
+    output.extend([
+        dbc.Card([
+            dbc.CardHeader("Borrow", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(f"{tot_borrow:,.2f}$", className="card-title"),
+            ])
+        ]),
+        dbc.Card([
+            dbc.CardHeader("Collateral", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(f"{tot_collateral:,.2f}$", className="card-title"),
+            ])
+        ]),
+    ])
+
+    return output
 
 @app.callback(
     Output("details-div", "children"),
@@ -142,17 +200,34 @@ def change_lookup_address(click_data: str):
         ])
 
 app.layout = html.Div([
-    Row([
-        Col(
+    dbc.Row([
+        dbc.Col(
             html.Div("", id="update-time", className='dbc'),
             width='auto',
         ),
-        Col(
+        dbc.Col(
             html.Button("Refresh", id='refresh-btn', className="dbc"),
             width='auto'
         ),
     ], className="dbc", style={'padding': 10}, justify='center'),
     dcc.Tabs([
+        dcc.Tab(label="Totals", className="dbc", children=[
+            html.Div([
+                dbc.Row([
+                    dbc.Col(dbc.Card(
+                        id=f"num-range-{i}",
+                    )) for i, _ in enumerate(RANGES)
+                ], style={"margin": "10px"}),
+                dbc.Row([
+                    dbc.Col(dbc.Card(
+                        id="tot-borrow"
+                    )),
+                    dbc.Col(dbc.Card(
+                        id="tot-collateral"
+                    )),
+                ], style={"margin": "10px"})
+            ], style={'text-align': 'center', 'margin-top': "20px"})
+        ]),
         dcc.Tab(label="Graph", className="dbc", children=[
             dcc.Graph(
                 id="borr-uti-graph",
@@ -170,14 +245,14 @@ app.layout = html.Div([
                     style_table={'overflowY': 'scroll'},
                 )
             ], className="dbc", id="table-div")
-        ])
+        ]),
     ], className="dbc"),
     #dcc.Interval(
     #    id='interval-component',
     #    interval=10*1000, # in milliseconds
     #    n_intervals=0
     #)
-], className="dbc")
+], className="dbc", style={"margin-left": "15px", "margin-right": "15px"})
 
 if __name__ == '__main__':
     app.run(debug=True)
