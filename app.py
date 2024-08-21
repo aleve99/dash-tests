@@ -57,8 +57,8 @@ def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:
                 table_dict['range'].append(r)
                 table_dict['storage_address'].append(loan["escrowAddress"])
                 table_dict['utilization_ratio'].append(int(loan["borrowUtilisationRatio"]) / 1e4)
-                table_dict['total_collateral_usd'].append(int(loan["totalCollateralBalanceValue"]) / 1e4)
-                table_dict['total_borrow_usd'].append(int(loan["totalBorrowBalanceValue"]) / 1e4)
+                table_dict['total_collateral_usd'].append(int(loan["totalEffectiveCollateralBalanceValue"]) / 1e4)
+                table_dict['total_borrow_usd'].append(int(loan["totalEffectiveBorrowBalanceValue"]) / 1e4)
                 table_dict['loan_type'].append(loan_type)       
                 for asset_id, symbol in symbols.items():
                     collaterals: list = loan['collaterals']
@@ -119,15 +119,16 @@ def update_graph(n_clicks: int):
     tot_borrow = df['total_borrow_usd'].sum()
     tot_collateral = df['total_collateral_usd'].sum()
     
+    light_df = df.drop("range", axis=1)
     output = [px.scatter(
-        data_frame=df,
+        data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address"]],
         x="utilization_ratio",
         y="total_borrow_usd",
         custom_data=["storage_address"],
         title="Liquidation Bot Dashboard",
     ).update_traces(hovertemplate=None), dash_table.DataTable(
-        data=df.to_dict("records"),
-        columns=[{'id': c, 'name': c} for c in df.columns],
+        data=light_df.to_dict("records"),
+        columns=[{'id': c, 'name': c} for c in light_df.columns],
         id="accounts-table",
         sort_action="native",
         style_table={'overflowY': 'scroll'},
@@ -225,7 +226,7 @@ app.layout = html.Div([
                     dbc.Col(dbc.Card(
                         id="tot-collateral"
                     )),
-                ], style={"margin": "10px"})
+                ], style={"margin-top": "20px", "margin-left": "10px", "margin-right": "10px"})
             ], style={'text-align': 'center', 'margin-top': "20px"})
         ]),
         dcc.Tab(label="Graph", className="dbc", children=[
