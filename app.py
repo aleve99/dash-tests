@@ -29,6 +29,7 @@ def update_jobs():
     try:
         record = loads(request.data)
     except JSONDecodeError:
+        server.logger.error(f"Error in decoding data: {request.data}")
         return "Can't decode object", 500
 
     if record is not None:
@@ -38,6 +39,7 @@ def update_jobs():
         server.logger.info(f"{DATA.absolute()} updated!")
         return jsonify({"response": "Jobs updated"})
     else:
+        server.logger.error(f"Error in decoding data: {request.data}")
         return "Can't decode object", 500
 
 schema = [
