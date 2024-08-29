@@ -1,22 +1,18 @@
 import dash_bootstrap_components as dbc
 from dash import Dash, html, dcc, Input, Output, dash_table
 from dash_bootstrap_templates import load_figure_template
-from json import load, dump, loads
+from json import dump, loads
 from json.decoder import JSONDecodeError
-from pandas import DataFrame
 import plotly.express as px
 from random import randint
 from flask import request, jsonify
 from pathlib import Path
-from typing import Tuple, List, Dict
-from datetime import datetime
 from os import environ
+from payload import Payload
 
 
 DATA_DIR = Path("." if not environ.get("DATA_DIR") else environ['DATA_DIR'])
 DATA = DATA_DIR.joinpath("data.json")
-
-RANGES: List[str] = []
 
 dbc_css = ("https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.2/dbc.min.css")
 app = Dash(__name__, external_stylesheets=[dbc.themes.SLATE, dbc_css])
@@ -24,59 +20,9 @@ server = app.server
 
 load_figure_template("slate")
 
-def load_and_tabulate_data() -> Tuple[DataFrame , List[str]]:
-    global RANGES
-    if DATA.exists():
-        with open(DATA) as file:
-            data: dict = load(file)
-            loans_data: Dict[Dict[str, List[dict]]] = data["LOANS"]
-            symbols: dict = data["SYMBOLS"]
-            timestamp = data["TIMESTAMP"]
-    else:
-        data: dict = {}
-        loans_data: dict = {}
-        symbols: dict = {}
-        timestamp = 0
-
-    RANGES = loans_data.keys()
-
-    table_dict = {
-        "range": [],
-        "storage_address": [],
-        "utilization_ratio": [],
-        "total_collateral_usd": [],
-        "total_borrow_usd": [],
-        "loan_type": [],
-        **{symbol + "_borrow_usd": [] for symbol in symbols.values()},
-        **{symbol + "_collateral_usd": [] for symbol in symbols.values()}
-    }
-
-    for r, loans_by_range in loans_data.items():
-        for loan_type, loans in loans_by_range.items():
-            for loan in loans:
-                table_dict['range'].append(r)
-                table_dict['storage_address'].append(loan["escrowAddress"])
-                table_dict['utilization_ratio'].append(int(loan["borrowUtilisationRatio"]) / 1e4)
-                table_dict['total_collateral_usd'].append(int(loan["totalEffectiveCollateralBalanceValue"]) / 1e4)
-                table_dict['total_borrow_usd'].append(int(loan["totalEffectiveBorrowBalanceValue"]) / 1e4)
-                table_dict['loan_type'].append(loan_type)       
-                for asset_id, symbol in symbols.items():
-                    collaterals: list = loan['collaterals']
-                    borrows: list = loan['borrows']
-                    
-                    collateral = list(filter(lambda c: c['assetId'] == int(asset_id), collaterals))
-                    borrow = list(filter(lambda c: c['assetId'] == int(asset_id), borrows))
-
-                    table_dict[symbol + "_collateral_usd"].append(
-                        int(collateral[0]['balanceValue']) / 1e4 if len(collateral) != 0 else 0
-                    )
-
-                    table_dict[symbol + "_borrow_usd"].append(
-                        int(borrow[0]['borrowBalanceValue']) / 1e4 if len(borrow) != 0 else 0
-                    )
-    
-    return DataFrame(data=table_dict), symbols, datetime.fromtimestamp(timestamp)
-load_and_tabulate_data()
+payload = Payload()
+payload.read_json(DATA)
+payload.compute_table()
 
 @server.route("/update-jobs", methods=['PUT'])
 def update_jobs():
@@ -100,7 +46,10 @@ schema = [
     Output("update-time", "children")
 ]
 schema.extend(
-    Output(f"num-range-{i}", "children") for i in range(len(RANGES))
+    Output(f"num-range-{i}-count", "children") for i in range(payload.n_ranges)
+)
+schema.extend(
+    Output(f"num-range-{i}-runtime", "children") for i in range(payload.n_ranges)
 )
 schema.extend([
     Output("tot-borrow", "children"),
@@ -112,28 +61,35 @@ schema.append(
 
 @app.callback(schema)
 def update_graph(n_clicks: int):
-    df, symbols, timestamp = load_and_tabulate_data()
+    payload.read_json(DATA)
+    payload.compute_table()
 
-    totals = [len(df[df["range"] == r]) for r in RANGES]
+    df = payload.df
+
+    totals = [len(df[df["range"] == r]) for r in payload.ranges]
 
     tot_borrow = df['total_borrow_usd'].sum()
     tot_collateral = df['total_collateral_usd'].sum()
     
     light_df = df.drop("range", axis=1)
-    output = [px.scatter(
-        data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address"]],
-        x="utilization_ratio",
-        y="total_borrow_usd",
-        custom_data=["storage_address"],
-        title="Liquidation Bot Dashboard",
-    ).update_traces(hovertemplate=None), dash_table.DataTable(
-        data=light_df.to_dict("records"),
-        columns=[{'id': c, 'name': c} for c in light_df.columns],
-        id="accounts-table",
-        sort_action="native",
-        style_table={'overflowY': 'scroll'},
-    ), html.Div(f"Last update: {timestamp}")]
+    output = [
+        px.scatter(
+            data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address"]],
+            x="utilization_ratio",
+            y="total_borrow_usd",
+            custom_data=["storage_address"],
+            title="Liquidation Bot Dashboard",
+        ).update_traces(hovertemplate=None),
+        dash_table.DataTable(
+            data=light_df.to_dict("records"),
+            columns=[{'id': c, 'name': c} for c in light_df.columns],
+            id="accounts-table",
+            sort_action="native",
+            style_table={'overflowY': 'scroll'},
+        ),
+        html.Div(f"Last update: {payload.timestamp}")]
     
+
     output.extend(
         dbc.Card([
             dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
@@ -141,7 +97,17 @@ def update_graph(n_clicks: int):
                 html.H1(n, className="card-title"),
                 html.P("loans", className="card-text"),
             ])
-        ]) for r, n in zip(RANGES, totals)
+        ]) for r, n in zip(payload.ranges, totals)
+    )
+    
+    output.extend(
+        dbc.Card([
+            dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(f"{int(payload.runtimes[r])}ms", className="card-title"),
+                html.P("rolling runtime", className="card-text"),
+            ])
+        ]) for r in payload.ranges
     )
 
     output.extend([
@@ -165,15 +131,32 @@ def update_graph(n_clicks: int):
     Output("details-div", "children"),
     Input("borr-uti-graph", "clickData"),
 )
-def change_lookup_address(click_data: str):
-    df, symbols, timestamp = load_and_tabulate_data()
+def change_lookup_address(click_data: 'str | None'):
+    payload.read_json(DATA)
+    payload.compute_table()
 
-    if click_data == None:
+    df = payload.df
+    symbols = payload.symbols
+
+    if click_data == None and df.empty:
+        storage_address, ut_ratio, total_b, total_c = "", 0, 0, 0
+    elif click_data == None and not df.empty:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
+        
+        storage_address = filtered_data[0]['storage_address']
+        ut_ratio = filtered_data[0]['utilization_ratio']
+        total_b = filtered_data[0]['total_borrow_usd']
+        total_c = filtered_data[0]['total_collateral_usd']
     else:
         filtered_data = df[df["storage_address"] == click_data["points"][0]["customdata"][-1]].to_dict("records")
         if not filtered_data:
             filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
+        
+        storage_address = filtered_data[0]['storage_address']
+        ut_ratio = filtered_data[0]['utilization_ratio']
+        total_b = filtered_data[0]['total_borrow_usd']
+        total_c = filtered_data[0]['total_collateral_usd']
+        
 
     first_row = {"TYPE": "collateral usd", **{symbol: filtered_data[0][symbol + "_collateral_usd"] for symbol in symbols.values()}}
     second_row = {"TYPE": "borrow usd", **{symbol: filtered_data[0][symbol + "_borrow_usd"] for symbol in symbols.values()}}
@@ -181,13 +164,13 @@ def change_lookup_address(click_data: str):
     return html.Div([
             html.H6(
                 dcc.Markdown(f"""
-                    Storage address: [{filtered_data[0]['storage_address'][:8]}...{filtered_data[0]['storage_address'][-8:]}](https://allo.info/account/{filtered_data[0]['storage_address']})
+                    Storage address: [{storage_address[:8]}...{storage_address[-8:]}](https://allo.info/account/{storage_address})
 
-                    Utilization ratio: {filtered_data[0]['utilization_ratio']}
+                    Utilization ratio: {ut_ratio}
 
-                    Total collateral: {filtered_data[0]['total_collateral_usd']}$
+                    Total collateral: {total_c}$
                     
-                    Total borrow: {filtered_data[0]['total_borrow_usd']}$"""),
+                    Total borrow: {total_b}$"""),
             ),
             html.Br(),
             dash_table.DataTable(
@@ -216,8 +199,13 @@ app.layout = html.Div([
             html.Div([
                 dbc.Row([
                     dbc.Col(dbc.Card(
-                        id=f"num-range-{i}",
-                    )) for i, _ in enumerate(RANGES)
+                        id=f"num-range-{i}-count",
+                    )) for i, _ in enumerate(payload.ranges)
+                ], style={"margin": "10px"}),
+                dbc.Row([
+                    dbc.Col(dbc.Card(
+                        id=f"num-range-{i}-runtime",
+                    )) for i, _ in enumerate(payload.ranges)
                 ], style={"margin": "10px"}),
                 dbc.Row([
                     dbc.Col(dbc.Card(
