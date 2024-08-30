@@ -51,7 +51,10 @@ schema.extend(
     Output(f"num-range-{i}-count", "children") for i in range(payload.n_ranges)
 )
 schema.extend(
-    Output(f"num-range-{i}-runtime", "children") for i in range(payload.n_ranges)
+    Output(f"num-range-{i}-runtime-single", "children") for i in range(payload.n_ranges)
+)
+schema.extend(
+    Output(f"num-range-{i}-runtime-group", "children") for i in range(payload.n_ranges)
 )
 schema.extend([
     Output("tot-borrow", "children"),
@@ -106,8 +109,18 @@ def update_graph(n_clicks: int):
         dbc.Card([
             dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(f"{int(payload.runtimes[r])}ms", className="card-title"),
-                html.P("rolling runtime", className="card-text"),
+                html.H1(f"{int(payload.runtimes_single[r])}ms", className="card-title"),
+                html.P("rolling runtime single", className="card-text"),
+            ])
+        ]) for r in payload.ranges
+    )
+
+    output.extend(
+        dbc.Card([
+            dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(f"{int(payload.runtimes_group[r])}ms", className="card-title"),
+                html.P("rolling runtime group", className="card-text"),
             ])
         ]) for r in payload.ranges
     )
@@ -206,7 +219,12 @@ app.layout = html.Div([
                 ], style={"margin": "10px"}),
                 dbc.Row([
                     dbc.Col(dbc.Card(
-                        id=f"num-range-{i}-runtime",
+                        id=f"num-range-{i}-runtime-single",
+                    )) for i, _ in enumerate(payload.ranges)
+                ], style={"margin": "10px"}),
+                dbc.Row([
+                    dbc.Col(dbc.Card(
+                        id=f"num-range-{i}-runtime-group",
                     )) for i, _ in enumerate(payload.ranges)
                 ], style={"margin": "10px"}),
                 dbc.Row([

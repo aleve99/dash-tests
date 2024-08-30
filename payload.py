@@ -8,7 +8,8 @@ from pandas import DataFrame
 class Payload:
     loans_data: Dict[str, Dict[str, List[dict]]] = {}
     symbols: dict = {}
-    runtimes: dict = {}
+    runtimes_single: dict = {}
+    runtimes_group: dict = {}
     timestamp: int = 0
     ranges: List[str] = []
     n_ranges: int = 0
@@ -23,7 +24,8 @@ class Payload:
         
             self.loans_data = json_data["LOANS"]
             self.symbols = json_data["SYMBOLS"]
-            self.runtimes = json_data["RUNTIMES"]
+            self.runtimes_single = json_data["RUNTIMES"]["single"]
+            self.runtimes_group = json_data["RUNTIMES"]["group"]
             self.timestamp = datetime.fromtimestamp(json_data["TIMESTAMP"])
             self.ranges = self.loans_data.keys()
             self.n_ranges = len(self.ranges)
