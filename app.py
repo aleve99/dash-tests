@@ -48,17 +48,16 @@ schema = [
     Output("update-time", "children")
 ]
 schema.extend(
-    Output(f"num-range-{i}-count", "children") for i in range(payload.n_ranges)
+    Output(f"stable-num-range-{i}", "children") for i in range(payload.n_ranges)
 )
 schema.extend(
-    Output(f"num-range-{i}-runtime-single", "children") for i in range(payload.n_ranges)
-)
-schema.extend(
-    Output(f"num-range-{i}-runtime-group", "children") for i in range(payload.n_ranges)
+    Output(f"other-num-range-{i}", "children") for i in range(payload.n_ranges)
 )
 schema.extend([
-    Output("tot-borrow", "children"),
-    Output("tot-collateral", "children")
+    Output("stable-tot-borrow", "children"),
+    Output("stable-tot-collateral", "children"),
+    Output("other-tot-borrow", "children"),
+    Output("other-tot-collateral", "children")
 ])
 schema.append(
     Input('refresh-btn', 'n_clicks')
@@ -70,13 +69,15 @@ def update_graph(n_clicks: int):
     payload.compute_table()
 
     df = payload.df
+    stable_count = [len(df[(df["range"] == r) & (df["class"] == "stable")]) for r in payload.ranges]
+    other_count = [len(df[(df["range"] == r) & (df["class"] == "other")]) for r in payload.ranges]
 
-    totals = [len(df[df["range"] == r]) for r in payload.ranges]
-
-    tot_borrow = df['total_borrow_usd'].sum()
-    tot_collateral = df['total_collateral_usd'].sum()
+    stable_tot_borrow = df[df["class"] == "stable"]['total_borrow_usd'].sum()
+    stable_tot_collateral = df[df["class"] == "stable"]['total_collateral_usd'].sum()
+    other_tot_borrow = df[df["class"] == "other"]['total_borrow_usd'].sum()
+    other_tot_collateral = df[df["class"] == "other"]['total_collateral_usd'].sum()
     
-    light_df = df.drop("range", axis=1)
+    light_df = df.drop(["range", "class"], axis=1)
     output = [
         px.scatter(
             data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address"]],
@@ -94,23 +95,16 @@ def update_graph(n_clicks: int):
         ),
         html.Div(f"Last update: {payload.timestamp}")]
     
-
     output.extend(
         dbc.Card([
             dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(n, className="card-title"),
+                html.H1(stable_count[payload.ranges.index(r)], className="card-title"),
                 html.P("loans", className="card-text"),
-            ])
-        ]) for r, n in zip(payload.ranges, totals)
-    )
-    
-    output.extend(
-        dbc.Card([
-            dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
-            dbc.CardBody([
-                html.H1(f"{int(payload.runtimes_single[r])}ms", className="card-title"),
+                html.H1(int(payload.runtimes_single['stable'][r]), className="card-title"),
                 html.P("rolling runtime single", className="card-text"),
+                html.H1(int(payload.runtimes_group['stable'][r]), className="card-title"),
+                html.P("rolling runtime group", className="card-text"),
             ])
         ]) for r in payload.ranges
     )
@@ -119,7 +113,11 @@ def update_graph(n_clicks: int):
         dbc.Card([
             dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(f"{int(payload.runtimes_group[r])}ms", className="card-title"),
+                html.H1(other_count[payload.ranges.index(r)], className="card-title"),
+                html.P("loans", className="card-text"),
+                html.H1(int(payload.runtimes_single['other'][r]), className="card-title"),
+                html.P("rolling runtime single", className="card-text"),
+                html.H1(int(payload.runtimes_group['other'][r]), className="card-title"),
                 html.P("rolling runtime group", className="card-text"),
             ])
         ]) for r in payload.ranges
@@ -129,13 +127,25 @@ def update_graph(n_clicks: int):
         dbc.Card([
             dbc.CardHeader("Borrow", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(f"{tot_borrow:,.2f}$", className="card-title"),
+                html.H1(f"{stable_tot_borrow:,.2f}$", className="card-title"),
             ])
         ]),
         dbc.Card([
             dbc.CardHeader("Collateral", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(f"{tot_collateral:,.2f}$", className="card-title"),
+                html.H1(f"{stable_tot_collateral:,.2f}$", className="card-title"),
+            ])
+        ]),
+        dbc.Card([
+            dbc.CardHeader("Borrow", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(f"{other_tot_borrow:,.2f}$", className="card-title"),
+            ])
+        ]),
+        dbc.Card([
+            dbc.CardHeader("Collateral", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardBody([
+                html.H1(f"{other_tot_collateral:,.2f}$", className="card-title"),
             ])
         ]),
     ])
@@ -198,6 +208,29 @@ def change_lookup_address(click_data: 'str | None'):
             )
         ])
 
+def get_metrics_tab(cl: str):
+    return dcc.Tab(
+        label=cl, 
+        className="dbc", 
+        children=[
+            html.Div([
+                dbc.Row([
+                    dbc.Col(dbc.Card(
+                        id=f"{cl}-num-range-{i}",
+                    )) for i, _ in enumerate(payload.ranges)
+                ], style={"margin": "10px"}),
+                dbc.Row([
+                    dbc.Col(dbc.Card(
+                        id=f"{cl}-tot-borrow"
+                    )),
+                dbc.Col(dbc.Card(
+                    id=f"{cl}-tot-collateral"
+                )),
+                ], style={"margin-top": "20px", "margin-left": "10px", "margin-right": "10px"})
+            ], style={'text-align': 'center', 'margin-top': "20px"})
+        ]
+    )
+
 app.layout = html.Div([
     dbc.Row([
         dbc.Col(
@@ -211,31 +244,10 @@ app.layout = html.Div([
     ], className="dbc", style={'padding': 10}, justify='center'),
     dcc.Tabs([
         dcc.Tab(label="Totals", className="dbc", children=[
-            html.Div([
-                dbc.Row([
-                    dbc.Col(dbc.Card(
-                        id=f"num-range-{i}-count",
-                    )) for i, _ in enumerate(payload.ranges)
-                ], style={"margin": "10px"}),
-                dbc.Row([
-                    dbc.Col(dbc.Card(
-                        id=f"num-range-{i}-runtime-single",
-                    )) for i, _ in enumerate(payload.ranges)
-                ], style={"margin": "10px"}),
-                dbc.Row([
-                    dbc.Col(dbc.Card(
-                        id=f"num-range-{i}-runtime-group",
-                    )) for i, _ in enumerate(payload.ranges)
-                ], style={"margin": "10px"}),
-                dbc.Row([
-                    dbc.Col(dbc.Card(
-                        id="tot-borrow"
-                    )),
-                    dbc.Col(dbc.Card(
-                        id="tot-collateral"
-                    )),
-                ], style={"margin-top": "20px", "margin-left": "10px", "margin-right": "10px"})
-            ], style={'text-align': 'center', 'margin-top': "20px"})
+            dcc.Tabs([
+                get_metrics_tab("stable"),
+                get_metrics_tab("other")
+            ])            
         ]),
         dcc.Tab(label="Graph", className="dbc", children=[
             dcc.Graph(
