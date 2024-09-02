@@ -164,7 +164,7 @@ def change_lookup_address(click_data: 'str | None'):
     symbols = payload.symbols
 
     if click_data == None and df.empty:
-        storage_address, ut_ratio, total_b, total_c = "", 0, 0, 0
+        storage_address, ut_ratio, total_b, total_c, cl = "", 0, 0, 0, ""
     elif click_data == None and not df.empty:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
         
@@ -172,6 +172,7 @@ def change_lookup_address(click_data: 'str | None'):
         ut_ratio = filtered_data[0]['utilization_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
         total_c = filtered_data[0]['total_collateral_usd']
+        cl = filtered_data[0]['class']
     else:
         filtered_data = df[df["storage_address"] == click_data["points"][0]["customdata"][-1]].to_dict("records")
         if not filtered_data:
@@ -181,7 +182,7 @@ def change_lookup_address(click_data: 'str | None'):
         ut_ratio = filtered_data[0]['utilization_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
         total_c = filtered_data[0]['total_collateral_usd']
-        
+        cl = filtered_data[0]['class']
 
     first_row = {"TYPE": "collateral usd", **{symbol: filtered_data[0][symbol + "_collateral_usd"] for symbol in symbols.values()}}
     second_row = {"TYPE": "borrow usd", **{symbol: filtered_data[0][symbol + "_borrow_usd"] for symbol in symbols.values()}}
@@ -189,13 +190,15 @@ def change_lookup_address(click_data: 'str | None'):
     return html.Div([
             html.H6(
                 dcc.Markdown(f"""
-                    Storage address: [{storage_address[:8]}...{storage_address[-8:]}](https://allo.info/account/{storage_address})
+                    _Storage address_: [{storage_address[:8]}...{storage_address[-8:]}](https://allo.info/account/{storage_address})
 
-                    Utilization ratio: {ut_ratio}
+                    _Loan class_: {cl}
 
-                    Total collateral: {total_c}$
+                    _Utilization ratio_: {ut_ratio}
+
+                    _Total collateral_: {total_c}$
                     
-                    Total borrow: {total_b}$"""),
+                    _Total borrow_: {total_b}$"""),
             ),
             html.Br(),
             dash_table.DataTable(
