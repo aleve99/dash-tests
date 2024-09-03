@@ -77,11 +77,11 @@ class Payload:
                             borrow = list(filter(lambda c: c['assetId'] == int(asset_id), borrows))
 
                             table_dict[symbol + "_collateral_usd"].append(
-                                int(collateral[0]['balanceValue']) / 1e4 if len(collateral) != 0 else 0
+                                int(collateral[0]['effectiveBalanceValue']) / 1e4 if len(collateral) != 0 else 0
                             )
 
                             table_dict[symbol + "_borrow_usd"].append(
-                                int(borrow[0]['borrowBalanceValue']) / 1e4 if len(borrow) != 0 else 0
+                                int(borrow[0]['effectiveBorrowBalanceValue']) / 1e4 if len(borrow) != 0 else 0
                             )
 
         self.df = DataFrame(data=table_dict)
