@@ -55,8 +55,8 @@ class Payload:
                         )
 
                         table_dict['utilization_ratio'].append(
-                            int(loan["borrowUtilisationRatio"]) / 1e4
-                        )
+                           (int(loan["totalEffectiveBorrowBalanceValue"]) / int(loan["totalEffectiveCollateralBalanceValue"])) / 1e4
+                        ) 
 
                         table_dict['total_collateral_usd'].append(
                             int(loan["totalEffectiveCollateralBalanceValue"]) / 1e4
