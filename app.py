@@ -164,12 +164,13 @@ def change_lookup_address(click_data: 'str | None'):
     symbols = payload.symbols
 
     if click_data == None and df.empty:
-        storage_address, ut_ratio, total_b, total_c, cl = "", 0, 0, 0, ""
+        storage_address, ut_ratio, st_ratio, total_b, total_c, cl = "", 0, 0, 0, 0, ""
     elif click_data == None and not df.empty:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
         
         storage_address = filtered_data[0]['storage_address']
         ut_ratio = filtered_data[0]['utilization_ratio']
+        st_ratio = filtered_data[0]['st_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
         total_c = filtered_data[0]['total_collateral_usd']
         cl = filtered_data[0]['class']
@@ -180,6 +181,7 @@ def change_lookup_address(click_data: 'str | None'):
         
         storage_address = filtered_data[0]['storage_address']
         ut_ratio = filtered_data[0]['utilization_ratio']
+        st_ratio = filtered_data[0]['st_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
         total_c = filtered_data[0]['total_collateral_usd']
         cl = filtered_data[0]['class']
@@ -195,6 +197,8 @@ def change_lookup_address(click_data: 'str | None'):
                     _Loan class_: {cl}
 
                     _Utilization ratio_: {ut_ratio}
+
+                    _Stability ratio_: {st_ratio}
 
                     _Total collateral_: {total_c}$
                     

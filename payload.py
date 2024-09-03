@@ -36,6 +36,7 @@ class Payload:
             "class": [],
             "storage_address": [],
             "utilization_ratio": [],
+            "st_ratio": [],
             "total_collateral_usd": [],
             "total_borrow_usd": [],
             "loan_type": [],
@@ -48,6 +49,7 @@ class Payload:
                 for loan_type, loans in loans_by_range.items():
                     for loan in loans:
                         table_dict['range'].append(r)
+                        table_dict['st_ratio'].append(loan['stRatio'])
                         table_dict['class'].append(cl)
 
                         table_dict['storage_address'].append(
