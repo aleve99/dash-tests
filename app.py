@@ -77,7 +77,7 @@ def update_graph(n_clicks: int):
     other_tot_borrow = df[df["class"] == "other"]['total_borrow_usd'].sum()
     other_tot_collateral = df[df["class"] == "other"]['total_collateral_usd'].sum()
     
-    light_df = df.drop(["range", "class"], axis=1)
+    light_df = df.drop(["range", "class", "st_ratio", "loan_type"], axis=1)
     output = [
         px.scatter(
             data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address"]],
