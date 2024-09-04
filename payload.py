@@ -35,6 +35,7 @@ class Payload:
             "range": [],
             "class": [],
             "storage_address": [],
+            "user_address": [],
             "utilization_ratio": [],
             "st_ratio": [],
             "total_collateral_usd": [],
@@ -54,6 +55,9 @@ class Payload:
 
                         table_dict['storage_address'].append(
                             loan["escrowAddress"]
+                        )
+                        table_dict['user_address'].append(
+                            loan["userAddress"]
                         )
 
                         table_dict['utilization_ratio'].append(

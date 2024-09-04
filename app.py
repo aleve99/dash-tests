@@ -164,11 +164,12 @@ def change_lookup_address(click_data: 'str | None'):
     symbols = payload.symbols
 
     if click_data == None and df.empty:
-        storage_address, ut_ratio, st_ratio, total_b, total_c, cl = "", 0, 0, 0, 0, ""
+        storage_address, user_address, ut_ratio, st_ratio, total_b, total_c, cl = "", "", 0, 0, 0, 0, ""
     elif click_data == None and not df.empty:
         filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
         
         storage_address = filtered_data[0]['storage_address']
+        user_address = filtered_data[0]['user_address']
         ut_ratio = filtered_data[0]['utilization_ratio']
         st_ratio = filtered_data[0]['st_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
@@ -180,6 +181,7 @@ def change_lookup_address(click_data: 'str | None'):
             filtered_data = [df.to_dict("records")[randint(0, len(df.to_dict("records")) - 1)]]
         
         storage_address = filtered_data[0]['storage_address']
+        user_address = filtered_data[0]['user_address']
         ut_ratio = filtered_data[0]['utilization_ratio']
         st_ratio = filtered_data[0]['st_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
@@ -192,9 +194,11 @@ def change_lookup_address(click_data: 'str | None'):
     return html.Div([
             html.H6(
                 dcc.Markdown(f"""
+                    _Loan class_: {cl}
+                    
                     _Storage address_: [{storage_address[:8]}...{storage_address[-8:]}](https://allo.info/account/{storage_address})
 
-                    _Loan class_: {cl}
+                    _User address_: [{user_address[:8]}...{user_address[-8:]}](https://allo.info/account/{user_address})
 
                     _Utilization ratio_: {ut_ratio}
 
