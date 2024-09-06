@@ -80,9 +80,14 @@ def update_graph(n_clicks: int):
     light_df = df.drop(["range", "class", "st_ratio", "loan_type"], axis=1)
     output = [
         px.scatter(
-            data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address"]],
+            data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address", "class"]],
             x="utilization_ratio",
             y="total_borrow_usd",
+            color="class",
+            color_discrete_map={
+                "stable": "#a0a0a0",  # Green for stable
+                "other": "#4b4b4b"    # Red for other
+            },
             custom_data=["storage_address"],
             title="Liquidation Bot Dashboard",
         ).update_traces(hovertemplate=None),
