@@ -69,21 +69,23 @@ def update_graph(n_clicks: int):
     payload.compute_table()
 
     df = payload.df
-    stable_count = [len(df[(df["range"] == r) & (df["class"] == "stable")]) for r in payload.ranges]
-    other_count = [len(df[(df["range"] == r) & (df["class"] == "other")]) for r in payload.ranges]
+    stable_count = [len(df[(df["range"] == i) & (df["category"] == "stable")]) for i in range(payload.n_ranges)]
+    other_count = [len(df[(df["range"] == i) & (df["category"] == "other")]) for i in range(payload.n_ranges)]
 
-    stable_tot_borrow = df[df["class"] == "stable"]['total_borrow_usd'].sum()
-    stable_tot_collateral = df[df["class"] == "stable"]['total_collateral_usd'].sum()
-    other_tot_borrow = df[df["class"] == "other"]['total_borrow_usd'].sum()
-    other_tot_collateral = df[df["class"] == "other"]['total_collateral_usd'].sum()
+    stable_tot_borrow = df[df["category"] == "stable"]['total_borrow_usd'].sum()
+
+    print(stable_tot_borrow)
+    stable_tot_collateral = df[df["category"] == "stable"]['total_collateral_usd'].sum()
+    other_tot_borrow = df[df["category"] == "other"]['total_borrow_usd'].sum()
+    other_tot_collateral = df[df["category"] == "other"]['total_collateral_usd'].sum()
     
-    light_df = df.drop(["range", "class", "st_ratio", "loan_type"], axis=1)
+    light_df = df.drop(["range", "category", "st_ratio"], axis=1)
     output = [
         px.scatter(
-            data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address", "class"]],
+            data_frame=df[["utilization_ratio", "total_borrow_usd", "storage_address", "category"]],
             x="utilization_ratio",
             y="total_borrow_usd",
-            color="class",
+            color="category",
             color_discrete_map={
                 "stable": "#a0a0a0",  # Green for stable
                 "other": "#4b4b4b"    # Red for other
@@ -102,30 +104,30 @@ def update_graph(n_clicks: int):
     
     output.extend(
         dbc.Card([
-            dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardHeader(f"{payload.ranges[i]}", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(stable_count[payload.ranges.index(r)], className="card-title"),
+                html.H1(stable_count[i], className="card-title"),
                 html.P("loans", className="card-text"),
-                html.H1(int(payload.runtimes_single['stable'][r]), className="card-title"),
+                html.H1(f"{int(payload.runtimes_single['stable'][i])}ms" if payload.runtimes_single['stable'][i] else 'NaN', className="card-title"),
                 html.P("rolling runtime single", className="card-text"),
-                html.H1(int(payload.runtimes_group['stable'][r]), className="card-title"),
+                html.H1(f"{int(payload.runtimes_group['stable'][i])}ms" if payload.runtimes_group['stable'][i] else 'NaN', className="card-title"),
                 html.P("rolling runtime group", className="card-text"),
             ])
-        ]) for r in payload.ranges
+        ]) for i in range(payload.n_ranges)
     )
 
     output.extend(
         dbc.Card([
-            dbc.CardHeader(f"{tuple(int(n)/1e4 for n in r.split('_'))}", style={'font-weight': 'bold', 'font-size': '150%'}),
+            dbc.CardHeader(f"{payload.ranges[i]}", style={'font-weight': 'bold', 'font-size': '150%'}),
             dbc.CardBody([
-                html.H1(other_count[payload.ranges.index(r)], className="card-title"),
+                html.H1(other_count[i], className="card-title"),
                 html.P("loans", className="card-text"),
-                html.H1(int(payload.runtimes_single['other'][r]), className="card-title"),
+                html.H1(f"{int(payload.runtimes_single['other'][i])}ms" if payload.runtimes_single['other'][i] else 'NaN', className="card-title"),
                 html.P("rolling runtime single", className="card-text"),
-                html.H1(int(payload.runtimes_group['other'][r]), className="card-title"),
+                html.H1(f"{int(payload.runtimes_group['other'][i])}ms" if payload.runtimes_group['other'][i] else 'NaN', className="card-title"),
                 html.P("rolling runtime group", className="card-text"),
             ])
-        ]) for r in payload.ranges
+        ]) for i in range(payload.n_ranges)
     )
 
     output.extend([
@@ -179,7 +181,7 @@ def change_lookup_address(click_data: 'str | None'):
         st_ratio = filtered_data[0]['st_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
         total_c = filtered_data[0]['total_collateral_usd']
-        cl = filtered_data[0]['class']
+        cl = filtered_data[0]['category']
     else:
         filtered_data = df[df["storage_address"] == click_data["points"][0]["customdata"][-1]].to_dict("records")
         if not filtered_data:
@@ -191,7 +193,7 @@ def change_lookup_address(click_data: 'str | None'):
         st_ratio = filtered_data[0]['st_ratio']
         total_b = filtered_data[0]['total_borrow_usd']
         total_c = filtered_data[0]['total_collateral_usd']
-        cl = filtered_data[0]['class']
+        cl = filtered_data[0]['category']
 
     first_row = {"TYPE": "collateral usd", **{symbol: filtered_data[0][symbol + "_collateral_usd"] for symbol in symbols.values()}}
     second_row = {"TYPE": "borrow usd", **{symbol: filtered_data[0][symbol + "_borrow_usd"] for symbol in symbols.values()}}
