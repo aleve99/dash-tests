@@ -20,7 +20,6 @@ class Payload:
     symbols: dict = {}
     categories: List[str] = []
     runtimes_single: Dict[str, List[float]] = {}
-    runtimes_group: Dict[str, List[float]] = {}
     timestamp: int = 0
     ranges: List[Tuple[float, float]] = []
     n_ranges: int = 0
@@ -41,15 +40,12 @@ class Payload:
             self.n_ranges = len(self.ranges)
 
             self.runtimes_single = {}
-            self.runtimes_group = {}
 
             for category in self.categories:
                 self.runtimes_single[category] = []
-                self.runtimes_group[category] = []
 
                 for liquidator in self.liquidator_data[category.upper()]:
-                    self.runtimes_single[category].append(liquidator["query_time_avg"])
-                    self.runtimes_group[category].append(liquidator["query_time"])
+                    self.runtimes_single[category].append(liquidator["query_time"])
 
     def compute_table(self) -> None:
         table_dict = {

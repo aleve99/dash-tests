@@ -110,8 +110,6 @@ def update_graph(n_clicks: int):
                 html.P("loans", className="card-text"),
                 html.H1(f"{int(payload.runtimes_single['stable'][i])}ms" if payload.runtimes_single['stable'][i] else 'NaN', className="card-title"),
                 html.P("rolling runtime single", className="card-text"),
-                html.H1(f"{int(payload.runtimes_group['stable'][i])}ms" if payload.runtimes_group['stable'][i] else 'NaN', className="card-title"),
-                html.P("rolling runtime group", className="card-text"),
             ])
         ]) for i in range(payload.n_ranges)
     )
@@ -124,8 +122,6 @@ def update_graph(n_clicks: int):
                 html.P("loans", className="card-text"),
                 html.H1(f"{int(payload.runtimes_single['other'][i])}ms" if payload.runtimes_single['other'][i] else 'NaN', className="card-title"),
                 html.P("rolling runtime single", className="card-text"),
-                html.H1(f"{int(payload.runtimes_group['other'][i])}ms" if payload.runtimes_group['other'][i] else 'NaN', className="card-title"),
-                html.P("rolling runtime group", className="card-text"),
             ])
         ]) for i in range(payload.n_ranges)
     )
