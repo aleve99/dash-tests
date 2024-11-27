@@ -158,8 +158,9 @@ def update_graph(n_clicks: int):
 @app.callback(
     Output("details-div", "children"),
     Input("borr-uti-graph", "clickData"),
+    Input('refresh-btn', 'n_clicks')
 )
-def change_lookup_address(click_data: 'str | None'):
+def change_lookup_address(click_data: 'str | None', n_clicks: int):
     payload.read_json(DATA)
     payload.compute_table()
 
