@@ -83,26 +83,27 @@ class Payload:
                     table_dict['range'].append(find_range(ut, self.ranges))
 
                     table_dict['total_collateral_usd'].append(
-                        int(loan["totalEffectiveCollateralBalanceValue"]) / 1e4
+                        int(loan["totalCollateralBalanceValue"]) / 1e4
                     )
 
                     table_dict['total_borrow_usd'].append(
-                        int(loan["totalEffectiveBorrowBalanceValue"]) / 1e4
+                        int(loan["totalBorrowBalanceValue"]) / 1e4
                     )
 
-                    for asset_id, symbol in self.symbols.items():
-                        collaterals: list = loan['collaterals']
-                        borrows: list = loan['borrows']
+                    collaterals: list = loan['collaterals']
+                    borrows: list = loan['borrows']
 
-                        collateral = list(filter(lambda c: c['assetId'] == int(asset_id), collaterals))
-                        borrow = list(filter(lambda c: c['assetId'] == int(asset_id), borrows))
+                    for asset_id, symbol in self.symbols.items():
+                        asset_id = int(asset_id)
+                        collateral = list(filter(lambda c: c['assetId'] == asset_id, collaterals))
+                        borrow = list(filter(lambda c: c['assetId'] == asset_id, borrows))
 
                         table_dict[symbol + "_collateral_usd"].append(
-                            int(collateral[0]['effectiveBalanceValue']) / 1e4 if len(collateral) != 0 else 0
+                            sum(int(c['balanceValue']) for c in collateral if c['assetId'] == asset_id) / 1e4 if len(collateral) != 0 else 0
                         )
 
                         table_dict[symbol + "_borrow_usd"].append(
-                            int(borrow[0]['effectiveBorrowBalanceValue']) / 1e4 if len(borrow) != 0 else 0
+                            sum(int(c['borrowBalanceValue']) for c in borrow if c['assetId'] == asset_id) / 1e4 if len(borrow) != 0 else 0
                         )
     
         self.df = DataFrame(data=table_dict)
