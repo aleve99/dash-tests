@@ -77,8 +77,11 @@ class Payload:
                         loan["stabilityRatio"]
                     )
 
-                    ut = int(loan["totalEffectiveBorrowBalanceValue"]) / int(loan["totalEffectiveCollateralBalanceValue"])
-                    table_dict['utilization_ratio'].append(ut)
+                    if loan["totalEffectiveCollateralBalanceValue"] != 0:
+                        ut = int(loan["totalEffectiveBorrowBalanceValue"]) / int(loan["totalEffectiveCollateralBalanceValue"])
+                        table_dict['utilization_ratio'].append(ut)
+                    else:
+                        table_dict['utilization_ratio'].append(0)
 
                     table_dict['range'].append(find_range(ut, self.ranges))
 
